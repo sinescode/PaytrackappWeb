@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+{% block title %}Settings — PayTrack{% endblock %}
+{% block content %}
+
+<div class="flex space-between mb-24" style="align-items:center">
+  <div class="section-title" style="font-size:18px;margin-bottom:0">Settings</div>
+  <div class="flex gap-8">
+    <a href="/settings/export" class="btn btn-outline btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Export Config
+    </a>
+    <button class="btn btn-primary btn-sm" onclick="document.getElementById('import-modal').style.display='flex'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Import Config
+    </button>
+  </div>
+</div>
+
+<!-- Tab navigation -->
+<div class="tabs mb-0">
+  <button class="tab-btn {% if active_tab == 'tiers' %}active{% endif %}" onclick="switchTab('tiers', this)">Tier Definitions</button>
+  <button class="tab-btn {% if active_tab == 'assignments' %}active{% endif %}" onclick="switchTab('assignments', this)">User Assignments</button>
+  <button class="tab-btn {% if active_tab == 'names' %}active{% endif %}" onclick="switchTab('names', this)">Custom Names</button>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TAB 1 — TIER DEFINITIONS
+   ═══════════════════════════════════════════════════════════════════════════ #}
+<div id="tab-tiers" class="tab-panel {% if active_tab == 'tiers' %}active{% endif %}">
+
+  {# ── Add form at top ── #}
+  <div class="card mb-16" style="border:2px dashed var(--slate200)">
+    <div class="text-xs fw-700 text-muted mb-12" style="letter-spacing:.5px;text-transform:uppercase">Add New Tier</div>
+    <form method="POST" action="/settings/tier/add">
+      <div class="flex gap-8" style="flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="min-width:120px;flex:2">
+          <label>Name</label>
+          <input name="name" placeholder="Standard" required/>
+        </div>
+        <div class="form-group" style="min-width:80px;flex:1">
+          <label>Min OK</label>
+          <input name="min_ok" type="number" placeholder="0" required/>
+        </div>
+        <div class="form-group" style="min-width:80px;flex:1">
+          <label>Max OK</label>
+          <input name="max_ok" type="number" placeholder="100" required/>
+        </div>
+        <div class="form-group" style="min-width:90px;flex:1">
+          <label>৳ / OK</label>
+          <input name="price_per_ok" type="number" step="any" placeholder="1.50" required/>
+        </div>
+        <div style="padding-bottom:1px;flex-shrink:0">
+          <button type="submit" class="btn btn-primary btn-sm">Add Tier</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {# ── Search ── #}
+  <div class="mb-12" style="position:relative">
+    <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none"
+         width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)" stroke-width="2.5">
+      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+    </svg>
+    <input id="search-tiers" oninput="filterTiers(this.value)"
+           placeholder="Search by tier name…"
+           style="width:100%;padding:8px 12px 8px 32px;box-sizing:border-box"/>
+  </div>
+
+  {# ── List ── #}
+  <div id="tiers-list">
+    {% if tier_defs %}
+      {% for t in tier_defs %}
+      <div class="card mb-8 tier-row"
+           data-name="{{ t.name | lower }}">
+        <form method="POST" action="/settings/tier/edit/{{ t.id }}"
+              class="flex gap-8" style="align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="min-width:120px;flex:2">
+            <label>Name</label>
+            <input name="name" value="{{ t.name }}" required/>
+          </div>
+          <div class="form-group" style="min-width:80px;flex:1">
+            <label>Min OK</label>
+            <input name="min_ok" type="number" value="{{ t.min_ok }}" required/>
+          </div>
+          <div class="form-group" style="min-width:80px;flex:1">
+            <label>Max OK</label>
+            <input name="max_ok" type="number" value="{{ t.max_ok }}" required/>
+          </div>
+          <div class="form-group" style="min-width:90px;flex:1">
+            <label>৳ / OK</label>
+            <input name="price_per_ok" type="number" step="any" value="{{ t.price_per_ok }}" required/>
+          </div>
+          <div class="flex gap-8" style="padding-bottom:1px;flex-shrink:0">
+            <button type="submit" class="btn btn-success btn-sm">Save</button>
+            <button type="button" class="btn btn-danger btn-sm"
+                    onclick="confirmDelete('/settings/tier/delete/{{ t.id }}',
+                      'Delete tier &quot;{{ t.name }}&quot;? This will also remove all user assignments for this tier.')">
+              Delete
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" id="tiers-empty-initial">
+        <div class="text-muted">No tier definitions yet.</div>
+      </div>
+    {% endif %}
+  </div>
+  <div id="tiers-no-results" style="display:none" class="empty-state">
+    <div class="text-muted">No tiers match your search.</div>
+  </div>
+</div>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TAB 2 — USER ASSIGNMENTS
+   ═══════════════════════════════════════════════════════════════════════════ #}
+<div id="tab-assignments" class="tab-panel {% if active_tab == 'assignments' %}active{% endif %}">
+
+  {# ── Add form at top ── #}
+  {% if tier_defs %}
+  <div class="card mb-16" style="border:2px dashed var(--slate200)">
+    <div class="text-xs fw-700 text-muted mb-12" style="letter-spacing:.5px;text-transform:uppercase">Assign User to Tier</div>
+    <form method="POST" action="/settings/assignment/add">
+      <div class="flex gap-8" style="align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:120px">
+          <label>User ID</label>
+          <input name="user_id" placeholder="e.g. 123456789" required class="mono"/>
+        </div>
+        <div class="form-group" style="flex:2;min-width:180px">
+          <label>Tier</label>
+          <select name="tier_def_id" required>
+            {% for t in tier_defs %}
+            <option value="{{ t.id }}">{{ t.name }} ({{ t.min_ok }}–{{ t.max_ok }} @ ৳{{ t.price_per_ok }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="padding-bottom:1px;flex-shrink:0">
+          <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <div class="card mb-16" style="border:2px dashed var(--slate200);text-align:center;padding:24px">
+    <div class="text-muted text-sm">Create tier definitions first before assigning users.</div>
+  </div>
+  {% endif %}
+
+  {# ── Dual search ── #}
+  <div class="flex gap-8 mb-12" style="flex-wrap:wrap">
+    <div style="position:relative;flex:1;min-width:140px">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none"
+           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input id="search-assign-uid" oninput="filterAssignments()"
+             placeholder="Search by User ID…"
+             style="width:100%;padding:8px 12px 8px 32px;box-sizing:border-box" class="mono"/>
+    </div>
+    <div style="position:relative;flex:1;min-width:140px">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none"
+           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input id="search-assign-tier" oninput="filterAssignments()"
+             placeholder="Search by tier name…"
+             style="width:100%;padding:8px 12px 8px 32px;box-sizing:border-box"/>
+    </div>
+  </div>
+
+  {# ── List ── #}
+  <div id="assignments-list">
+    {% if user_assignments %}
+      {% for a in user_assignments %}
+      <div class="card mb-8 assign-row"
+           data-uid="{{ a['user_id'] | lower }}"
+           data-tier="{{ a['tier_name'] | lower }}">
+        <form method="POST" action="/settings/assignment/edit/{{ a['id'] }}"
+              class="flex gap-8" style="align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:120px">
+            <label>User ID</label>
+            <input name="user_id" value="{{ a['user_id'] }}" required class="mono"/>
+            {% if a['display_name'] %}
+            <div style="display:inline-block;margin-top:5px;padding:2px 8px;
+                        background:var(--surface);border:1px solid var(--slate200);
+                        border-radius:4px;font-size:11px;font-weight:600;
+                        color:var(--slate400);letter-spacing:.3px;white-space:nowrap">
+              {{ a['display_name'] }}
+            </div>
+            {% endif %}
+          </div>
+          <div class="form-group" style="flex:2;min-width:180px">
+            <label>Tier</label>
+            <select name="tier_def_id" required>
+              {% for t in tier_defs %}
+              <option value="{{ t.id }}" {% if t.id == a['tier_def_id'] %}selected{% endif %}>
+                {{ t.name }} ({{ t.min_ok }}–{{ t.max_ok }} @ ৳{{ t.price_per_ok }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex gap-8" style="padding-bottom:1px;flex-shrink:0">
+            <button type="submit" class="btn btn-success btn-sm">Save</button>
+            <button type="button" class="btn btn-danger btn-sm"
+                    onclick="alertDelete('/settings/assignment/delete/{{ a['id'] }}',
+                      'Remove tier assignment for user {{ a['user_id'] }}?')">
+              Remove
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" id="assign-empty-initial">
+        <div class="text-muted">No user assignments. Users without assignments use global tiers.</div>
+      </div>
+    {% endif %}
+  </div>
+  <div id="assign-no-results" style="display:none" class="empty-state">
+    <div class="text-muted">No assignments match your search.</div>
+  </div>
+</div>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TAB 3 — CUSTOM NAMES
+   ═══════════════════════════════════════════════════════════════════════════ #}
+<div id="tab-names" class="tab-panel {% if active_tab == 'names' %}active{% endif %}">
+
+  {# ── Add form at top ── #}
+  <div class="card mb-16" style="border:2px dashed var(--slate200)">
+    <div class="text-xs fw-700 text-muted mb-12" style="letter-spacing:.5px;text-transform:uppercase">Add / Update Custom Name</div>
+    <form method="POST" action="/settings/name/add">
+      <div class="flex gap-8" style="align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:120px">
+          <label>User ID</label>
+          <input name="user_id" placeholder="e.g. 123456789" required class="mono"/>
+        </div>
+        <div class="form-group" style="flex:1;min-width:140px">
+          <label>Display Name</label>
+          <input name="display_name" placeholder="e.g. John Doe" required/>
+        </div>
+        <div style="padding-bottom:1px;flex-shrink:0">
+          <button type="submit" class="btn btn-primary btn-sm">Save Name</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {# ── Dual search ── #}
+  <div class="flex gap-8 mb-12" style="flex-wrap:wrap">
+    <div style="position:relative;flex:1;min-width:140px">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none"
+           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input id="search-names-uid" oninput="filterNames()"
+             placeholder="Search by User ID…"
+             style="width:100%;padding:8px 12px 8px 32px;box-sizing:border-box" class="mono"/>
+    </div>
+    <div style="position:relative;flex:1;min-width:140px">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none"
+           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input id="search-names-name" oninput="filterNames()"
+             placeholder="Search by display name…"
+             style="width:100%;padding:8px 12px 8px 32px;box-sizing:border-box"/>
+    </div>
+  </div>
+
+  {# ── List ── #}
+  <div id="names-list">
+    {% if custom_names %}
+      {% for n in custom_names %}
+      <div class="card mb-8 name-row"
+           data-uid="{{ n.user_id | lower }}"
+           data-name="{{ n.display_name | lower }}">
+        <form method="POST" action="/settings/name/edit/{{ n.user_id }}"
+              class="flex gap-8" style="align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:120px">
+            <label>User ID</label>
+            <input name="user_id" value="{{ n.user_id }}" required class="mono"/>
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px">
+            <label>Display Name</label>
+            <input name="display_name" value="{{ n.display_name }}" required/>
+          </div>
+          <div class="flex gap-8" style="padding-bottom:1px;flex-shrink:0">
+            <button type="submit" class="btn btn-success btn-sm">Save</button>
+            <button type="button" class="btn btn-danger btn-sm"
+                    onclick="alertDelete('/settings/name/delete/{{ n.user_id }}',
+                      'Delete custom name for {{ n.user_id }}?')">
+              Delete
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" id="names-empty-initial">
+        <div class="text-muted">No custom names. User IDs are shown by default.</div>
+      </div>
+    {% endif %}
+  </div>
+  <div id="names-no-results" style="display:none" class="empty-state">
+    <div class="text-muted">No names match your search.</div>
+  </div>
+</div>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   DELETE CONFIRM MODAL  (used only for Tier Definitions)
+   ═══════════════════════════════════════════════════════════════════════════ #}
+<div id="delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:200;align-items:center;justify-content:center">
+  <div class="card" style="max-width:360px;width:90%;padding:24px">
+    <div class="fw-700 mb-8" id="delete-modal-msg">Are you sure?</div>
+    <div class="flex gap-8 mt-16" style="justify-content:flex-end">
+      <button class="btn btn-outline btn-sm"
+              onclick="document.getElementById('delete-modal').style.display='none'">Cancel</button>
+      <form id="delete-form" method="POST">
+        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   IMPORT MODAL
+   ═══════════════════════════════════════════════════════════════════════════ #}
+<div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:200;align-items:center;justify-content:center">
+  <div class="card" style="max-width:400px;width:90%;padding:24px">
+    <div class="fw-700 mb-8 flex space-between">
+      Import Config
+      <button onclick="document.getElementById('import-modal').style.display='none'"
+              style="background:none;border:none;cursor:pointer;color:var(--slate400);font-size:18px">✕</button>
+    </div>
+    <div class="text-sm text-muted mb-16">
+      This will replace all tier definitions, user assignments, custom names, and balances with the file contents.
+    </div>
+    <form method="POST" action="/settings/import" enctype="multipart/form-data">
+      <div class="form-group">
+        <label>Config JSON file</label>
+        <input type="file" name="config_file" accept=".json" required/>
+      </div>
+      <div class="flex gap-8 mt-16" style="justify-content:flex-end">
+        <button type="button" class="btn btn-outline btn-sm"
+                onclick="document.getElementById('import-modal').style.display='none'">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Import</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  // clear searches when switching tabs
+  ['search-tiers','search-assign-uid','search-assign-tier',
+   'search-names-uid','search-names-name'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  if (name === 'tiers')       filterTiers('');
+  if (name === 'assignments') filterAssignments();
+  if (name === 'names')       filterNames();
+}
+
+// ── Tier Definitions search ────────────────────────────────────────────────
+function filterTiers(q) {
+  q = q.toLowerCase();
+  const rows    = document.querySelectorAll('.tier-row');
+  let   visible = 0;
+  rows.forEach(row => {
+    const match = row.dataset.name.includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const noResults = document.getElementById('tiers-no-results');
+  if (noResults) noResults.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+}
+
+// ── User Assignments dual search ───────────────────────────────────────────
+function filterAssignments() {
+  const qUid  = document.getElementById('search-assign-uid').value.toLowerCase();
+  const qTier = document.getElementById('search-assign-tier').value.toLowerCase();
+  const rows  = document.querySelectorAll('.assign-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const match = row.dataset.uid.includes(qUid) && row.dataset.tier.includes(qTier);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const noResults = document.getElementById('assign-no-results');
+  if (noResults) noResults.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+}
+
+// ── Custom Names dual search ───────────────────────────────────────────────
+function filterNames() {
+  const qUid  = document.getElementById('search-names-uid').value.toLowerCase();
+  const qName = document.getElementById('search-names-name').value.toLowerCase();
+  const rows  = document.querySelectorAll('.name-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const match = row.dataset.uid.includes(qUid) && row.dataset.name.includes(qName);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const noResults = document.getElementById('names-no-results');
+  if (noResults) noResults.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+}
+
+// ── Delete modal — for Tier Definitions only ───────────────────────────────
+function confirmDelete(action, msg) {
+  document.getElementById('delete-modal-msg').textContent = msg;
+  document.getElementById('delete-form').action = action;
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+
+// ── Alert-style delete — for Assignments & Custom Names ───────────────────
+function alertDelete(action, msg) {
+  if (window.confirm(msg)) {
+    const f = document.createElement('form');
+    f.method = 'POST';
+    f.action = action;
+    document.body.appendChild(f);
+    f.submit();
+  }
+}
+</script>
+{% endblock %}

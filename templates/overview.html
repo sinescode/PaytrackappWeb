@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}PayTrack — Overview{% endblock %}
+{% block content %}
+
+<!-- Summary card -->
+<div class="card mb-16">
+  <div class="flex space-between gap-16">
+    <div>
+      <div class="text-xs text-muted fw-700 mb-8" style="letter-spacing:.8px;text-transform:uppercase">Total Pending</div>
+      <div class="mono fw-700" style="font-size:32px;color:var(--red)">৳{{ "%.2f"|format(total_pending) }}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="text-xs text-muted fw-700 mb-8" style="letter-spacing:.8px;text-transform:uppercase">Users</div>
+      <div class="fw-700" style="font-size:28px;color:var(--slate900)" id="user-count">{{ users|length }}</div>
+    </div>
+  </div>
+  <hr class="divider">
+  <div class="flex space-between" style="align-items:center">
+    <div class="text-xs text-muted">{{ today }}</div>
+    {% if users %}
+    <button class="btn btn-tg" onclick="startSendAll()" id="send-all-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+      Send to All Users
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Search -->
+<div class="search-wrap mb-16">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+  </svg>
+  <input id="search" type="text" placeholder="Search by user ID or name…" oninput="filterUsers(this.value)"/>
+</div>
+
+<!-- User list -->
+<div id="user-list">
+{% if users %}
+  {% for u in users %}
+  {% set initial = u.display_name[0].upper() %}
+  {% set is_credit = u.pending < 0 %}
+  <div class="card mb-8 user-row" data-uid="{{ u.user_id|lower }}" data-name="{{ u.display_name|lower }}"
+       style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+
+    <a href="/user/{{ u.user_id }}" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+      <div class="avatar">{{ initial }}</div>
+      <div style="flex:1;min-width:0">
+        <div class="fw-700 mono" style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.display_name }}</div>
+        <div class="text-xs text-muted mono" style="display:flex;align-items:center;gap:4px">
+          ID: {{ u.user_id }}
+          <button
+            class="copy-id-btn"
+            data-id="{{ u.user_id }}"
+            onclick="copyUserId(event, this, '{{ u.user_id }}')"
+            title="Copy user ID"
+            style="background:none;border:none;cursor:pointer;padding:0 2px;color:var(--slate400);display:inline-flex;align-items:center;line-height:1;border-radius:4px;transition:color .15s">
+            <!-- Copy icon -->
+            <svg class="copy-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <!-- Check icon (hidden by default) -->
+            <svg class="check-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5" style="display:none">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="mono fw-700" style="font-size:15px;color:{{ '#16A34A' if is_credit else '#DC2626' }};white-space:nowrap;margin-right:8px">
+        ৳{{ "%.2f"|format(u.pending) }}
+      </div>
+    </a>
+
+    <a href="/user/{{ u.user_id }}" style="text-decoration:none;color:inherit;flex-shrink:0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    </a>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/>
+    </svg>
+    <div class="fw-700" style="color:var(--slate700)">All clear</div>
+    <div class="text-sm">No users yet. Upload a CSV to get started.</div>
+    <a href="/upload" class="btn btn-primary mt-16">Upload CSV</a>
+  </div>
+{% endif %}
+</div>
+
+<div id="no-results" style="display:none" class="empty-state">
+  <div class="fw-700" style="color:var(--slate700)">No matches</div>
+  <div class="text-sm">Try a different search term.</div>
+</div>
+
+<!-- ═══ Send All Dialog ═══════════════════════════════════════════════════════ -->
+<div id="send-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:20px;padding:24px;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+
+    <!-- Title row -->
+    <div class="flex space-between mb-16">
+      <div class="fw-700" style="font-size:16px" id="modal-title">Send to All Users</div>
+      <button id="modal-close-btn" onclick="cancelSend()"
+              style="background:none;border:none;cursor:pointer;color:var(--slate400);font-size:22px;line-height:1;padding:0 4px">✕</button>
+    </div>
+
+    <!-- Preparing spinner -->
+    <div id="modal-preparing" style="text-align:center;padding:20px 0">
+      <div class="spinner" style="margin:0 auto 12px"></div>
+      <div class="text-sm text-muted" id="modal-prep-text">Generating cards…</div>
+    </div>
+
+    <!-- Progress bar (shown once sending starts) -->
+    <div id="modal-progress-wrap" style="display:none;margin-bottom:12px">
+      <div style="background:var(--slate100);border-radius:8px;height:8px;overflow:hidden">
+        <div id="modal-progress-bar" style="height:100%;width:0%;background:var(--tg);border-radius:8px;transition:width .3s"></div>
+      </div>
+      <div class="flex space-between mt-8">
+        <div class="text-xs text-muted" id="modal-progress-txt">0 / 0</div>
+        <div class="text-xs text-muted" id="modal-progress-pct">0%</div>
+      </div>
+    </div>
+
+    <!-- Stats badges -->
+    <div id="modal-stats" style="display:none;justify-content:center;gap:8px;margin-bottom:12px" class="flex">
+      <span class="stat-badge" id="badge-sent"   style="background:#DCFCE7;color:#166534">0 sent</span>
+      <span class="stat-badge" id="badge-failed" style="background:#FEE2E2;color:#991B1B">0 failed</span>
+      <span class="stat-badge" id="badge-blocked"style="background:#FEF9C3;color:#854D0E">0 blocked</span>
+    </div>
+
+    <!-- Live log -->
+    <div id="modal-log"
+         style="display:none;height:200px;overflow-y:auto;border:1px solid var(--slate200);border-radius:8px;padding:8px;font-size:12px;font-family:monospace;background:var(--slate50)">
+    </div>
+
+    <!-- Action buttons -->
+    <div id="modal-actions" style="display:none;gap:8px;justify-content:flex-end;margin-top:16px" class="flex">
+      <button id="btn-retry" style="display:none" class="btn btn-outline"
+              onclick="retrySend()" style="color:var(--red);border-color:var(--red)">
+        ↻ Retry Failed
+      </button>
+      <button id="btn-done" style="display:none" class="btn btn-primary" onclick="closeSendModal()">
+        Done
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.spinner{width:32px;height:32px;border:3px solid var(--slate200);border-top-color:var(--tg);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stat-badge{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;font-family:monospace}
+.log-row{display:flex;align-items:flex-start;gap:6px;padding:2px 0;border-bottom:1px solid var(--slate100)}
+.log-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.copy-id-btn:hover { color: var(--slate700) !important; }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let evtSource = null;
+let totalUsers = 0;
+let doneCount  = 0;
+let failedUids = [];
+let retryRound = 0;
+
+function copyUserId(event, btn, uid) {
+  event.preventDefault();   // don't follow the parent <a> link
+  event.stopPropagation();
+
+  navigator.clipboard.writeText(uid).then(() => {
+    // Swap to check icon
+    btn.querySelector('.copy-icon').style.display = 'none';
+    btn.querySelector('.check-icon').style.display = 'inline';
+
+    // Revert after 1.5 s
+    setTimeout(() => {
+      btn.querySelector('.copy-icon').style.display = 'inline';
+      btn.querySelector('.check-icon').style.display = 'none';
+    }, 1500);
+  }).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = uid;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+
+    btn.querySelector('.copy-icon').style.display = 'none';
+    btn.querySelector('.check-icon').style.display = 'inline';
+    setTimeout(() => {
+      btn.querySelector('.copy-icon').style.display = 'inline';
+      btn.querySelector('.check-icon').style.display = 'none';
+    }, 1500);
+  });
+}
+
+function filterUsers(q) {
+  q = q.toLowerCase().trim();
+  const rows = document.querySelectorAll('.user-row');
+  let visible = 0;
+  rows.forEach(r => {
+    const match = !q || r.dataset.uid.includes(q) || r.dataset.name.includes(q);
+    r.style.display = match ? 'flex' : 'none';
+    if (match) visible++;
+  });
+  document.getElementById('user-count').textContent = visible;
+  document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
+}
+
+function startSendAll(retryIds) {
+  // Reset UI
+  doneCount = 0; failedUids = [];
+  document.getElementById('send-modal').style.display = 'flex';
+  document.getElementById('modal-close-btn').style.display = '';
+  document.getElementById('modal-preparing').style.display = 'block';
+  document.getElementById('modal-prep-text').textContent = 'Generating cards…';
+  document.getElementById('modal-progress-wrap').style.display = 'none';
+  document.getElementById('modal-stats').style.display = 'none';
+  document.getElementById('modal-log').style.display = 'none';
+  document.getElementById('modal-log').innerHTML = '';
+  document.getElementById('modal-actions').style.display = 'none';
+  document.getElementById('btn-retry').style.display = 'none';
+  document.getElementById('btn-done').style.display = 'none';
+
+  const url = retryIds
+    ? '/send-all/stream?retry=' + encodeURIComponent(retryIds.join(','))
+    : '/send-all/stream';
+
+  evtSource = new EventSource(url);
+  evtSource.onmessage = handleEvent;
+  evtSource.onerror   = () => {
+    appendLog('–', 'Connection lost', 'err');
+    finishModal(null);
+  };
+}
+
+function handleEvent(e) {
+  const d = JSON.parse(e.data);
+
+  if (d.type === 'start') {
+    totalUsers = d.total;
+    document.getElementById('modal-title').textContent =
+      retryRound > 0 ? `Send to All — Retry #${retryRound}` : 'Send to All Users';
+    document.getElementById('modal-preparing').style.display = 'none';
+    document.getElementById('modal-progress-wrap').style.display = 'block';
+    document.getElementById('modal-stats').style.display = 'flex';
+    document.getElementById('modal-log').style.display = 'block';
+    updateProgress(0, totalUsers);
+    return;
+  }
+
+  if (d.type === 'log') {
+    appendLog(d.name || d.uid, d.msg, d.status, d.uid);
+    return;
+  }
+
+  if (d.type === 'update') {
+    updateLogRow(d.uid, d.status, d.msg);
+    if (d.status === 'ok' || d.status === 'err' || d.status === 'blocked') {
+      doneCount++;
+      updateProgress(doneCount, totalUsers);
+    }
+    updateBadges();
+    return;
+  }
+
+  if (d.type === 'done') {
+    evtSource && evtSource.close();
+    failedUids = d.failed_uids || [];
+    finishModal(d);
+  }
+}
+
+function appendLog(name, msg, status, uid) {
+  const log  = document.getElementById('modal-log');
+  const row  = document.createElement('div');
+  row.className = 'log-row';
+  row.id = uid ? 'logrow-' + uid : '';
+  row.innerHTML = `<span class="log-dot" style="background:${dotColor(status)}"></span>
+    <span style="flex:1"><b>${escHtml(name)}</b> <span class="text-muted" id="logmsg-${escHtml(uid||'')}">— ${escHtml(msg)}</span></span>`;
+  log.prepend(row);
+}
+
+function updateLogRow(uid, status, msg) {
+  const dot = document.querySelector(`#logrow-${uid} .log-dot`);
+  const txt = document.getElementById('logmsg-' + uid);
+  if (dot) dot.style.background = dotColor(status);
+  if (txt) txt.textContent = '— ' + msg;
+}
+
+function dotColor(status) {
+  return {ok:'#16A34A', err:'#DC2626', blocked:'#D97706', retry:'#EA580C', pending:'#94A3B8'}[status] || '#94A3B8';
+}
+
+function updateProgress(done, total) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  document.getElementById('modal-progress-bar').style.width = pct + '%';
+  document.getElementById('modal-progress-txt').textContent = done + ' / ' + total;
+  document.getElementById('modal-progress-pct').textContent = pct + '%';
+}
+
+function updateBadges() {
+  const rows  = document.querySelectorAll('.log-row');
+  let s=0, f=0, b=0;
+  rows.forEach(r => {
+    const dot = r.querySelector('.log-dot');
+    if (!dot) return;
+    const c = dot.style.background;
+    if (c === 'rgb(22, 163, 74)')  s++;
+    if (c === 'rgb(220, 38, 38)')  f++;
+    if (c === 'rgb(217, 119, 6)')  b++;
+  });
+  document.getElementById('badge-sent').textContent   = s + ' sent';
+  document.getElementById('badge-failed').textContent = f + ' failed';
+  document.getElementById('badge-blocked').textContent= b + ' blocked';
+}
+
+function finishModal(d) {
+  document.getElementById('modal-close-btn').style.display = 'none';
+  document.getElementById('modal-actions').style.display = 'flex';
+  document.getElementById('btn-done').style.display = '';
+  updateBadges();
+  if (d && d.failed > 0) {
+    const btn = document.getElementById('btn-retry');
+    btn.style.display = '';
+    btn.textContent = '↻ Retry ' + d.failed + ' failed';
+  }
+}
+
+function retrySend() {
+  retryRound++;
+  startSendAll(failedUids);
+}
+
+function cancelSend() {
+  evtSource && evtSource.close();
+  document.getElementById('send-modal').style.display = 'none';
+}
+
+function closeSendModal() {
+  evtSource && evtSource.close();
+  document.getElementById('send-modal').style.display = 'none';
+  retryRound = 0;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

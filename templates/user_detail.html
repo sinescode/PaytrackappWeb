@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}{{ display_name }} — PayTrack{% endblock %}
+{% block content %}
+
+<!-- Back -->
+<a href="/" class="btn btn-outline btn-sm mb-16">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M15 18l-6-6 6-6"/>
+  </svg>
+  All Users
+</a>
+
+{% set is_credit = pending < 0 %}
+
+<!-- User card -->
+<div class="card mb-16">
+  <div class="flex gap-16 mb-16">
+    <div class="avatar" style="width:52px;height:52px;font-size:20px;border-radius:14px;background:var(--blue);color:#fff">
+      {{ display_name[0].upper() }}
+    </div>
+    <div style="flex:1">
+      <div class="fw-700 mono" style="font-size:18px">{{ display_name }}</div>
+      <div class="flex gap-8 mt-8">
+        <span class="text-xs text-muted mono">ID: {{ user_id }}</span>
+        <button class="btn btn-outline btn-sm" onclick="copyId()" style="padding:2px 8px;font-size:11px">
+          Copy ID
+        </button>
+      </div>
+    </div>
+    <span class="text-xs text-muted mono" style="align-self:flex-start">PAYTRACK</span>
+  </div>
+
+  <hr class="divider">
+
+  <div class="text-xs fw-700 text-muted mb-8" style="letter-spacing:.8px;text-transform:uppercase">Pending Balance</div>
+  <div class="mono fw-700" style="font-size:36px;color:{{ '#16A34A' if is_credit else '#DC2626' }}">
+    ৳{{ "%.2f"|format(pending) }}
+  </div>
+  <div class="flex gap-8 mt-16" style="justify-content:space-between;align-items:center">
+    <span class="pill {{ 'pill-green' if is_credit else 'pill-red' }}">
+      {{ '● Credit' if is_credit else '● Pending' }}
+    </span>
+    <div class="flex gap-8">
+      <span class="text-xs text-muted mono" style="align-self:center">{{ today }}</span>
+      <button class="btn btn-tg btn-sm" id="send-tg-btn" onclick="sendTelegram()"
+              style="gap:4px;cursor:pointer">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+        Send via Telegram
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Send result -->
+<div id="send-result" style="display:none" class="flash mb-16"></div>
+
+<!-- Record Transaction -->
+<div class="card mb-16">
+  <div class="section-title">Record Transaction</div>
+  <form method="POST" action="/user/{{ user_id }}/transaction">
+    <div class="input-row">
+      <div class="form-group">
+        <label>Amount (৳)</label>
+        <input type="number" name="amount" step="0.01" placeholder="0.00" required
+               style="font-family:monospace"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-bottom:0;flex-shrink:0">Apply</button>
+    </div>
+    <div class="text-xs text-muted mt-8">
+      Positive = payment (reduces balance). Negative = charge (adds to balance).
+    </div>
+  </form>
+  {% if balance != 0 %}
+  <div class="text-sm text-muted mt-8">
+    Adjustment balance: <span class="mono fw-700">৳{{ "%.2f"|format(balance) }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Entry History -->
+<div class="card">
+  <div class="flex space-between mb-16">
+    <div class="section-title" style="margin-bottom:0">Entry History</div>
+    <span class="text-xs text-muted">{{ entries|length }} records</span>
+  </div>
+
+  {% if entries %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th style="text-align:right">OK</th>
+          <th style="text-align:right">Rate</th>
+          <th style="text-align:right">Total</th>
+          <th>Bkash</th>
+          <th>Rocket</th>
+          <th>Paid</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        {% set date = e['filename'].replace('.csv','') %}
+        <tr>
+          <td class="mono text-sm">{{ date }}</td>
+          <td class="mono" style="text-align:right">{{ e['ok_count'] }}</td>
+          <td class="mono text-sm text-muted" style="text-align:right">৳{{ "%.2f"|format(e['price_per_ok']) }}</td>
+          <td class="mono fw-700" style="text-align:right">৳{{ "%.2f"|format(e['total']) }}</td>
+          <td>
+            {% if e['bkash'] and e['bkash'] != 'Not Provided' %}
+              <span class="pill pill-blue">{{ e['bkash'] }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e['rocket'] and e['rocket'] != 'Not Provided' %}
+              <span class="pill pill-purple">{{ e['rocket'] }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e['paid_status'] == 'paid' or e['paid_status'] == 'yes' %}
+              <span class="pill pill-green">Paid</span>
+            {% elif e['paid_status'] %}
+              <span class="pill pill-gray">{{ e['paid_status'] }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:32px">
+    <div class="text-muted">No entries found for this user.</div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyId() {
+  navigator.clipboard.writeText('{{ user_id }}').then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy ID', 1500);
+  });
+}
+
+function sendTelegram() {
+  const btn  = document.getElementById('send-tg-btn');
+  const res  = document.getElementById('send-result');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Sending…';
+  res.style.display = 'none';
+
+  fetch('/user/{{ user_id }}/send', {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send via Telegram';
+      res.style.display = 'block';
+      if (data.ok) {
+        res.className = 'flash flash-success mb-16';
+        res.textContent = '✓ Sent successfully to {{ user_id }}!';
+      } else if (data.blocked) {
+        res.className = 'flash flash-error mb-16';
+        res.textContent = '⛔ User has blocked the bot.';
+      } else {
+        res.className = 'flash flash-error mb-16';
+        res.textContent = '✗ Failed: ' + (data.error || 'unknown error');
+      }
+      setTimeout(() => res.style.display = 'none', 5000);
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.textContent = 'Send via Telegram';
+      res.style.display = 'block';
+      res.className = 'flash flash-error mb-16';
+      res.textContent = '✗ Network error: ' + err;
+    });
+}
+</script>
+{% endblock %}

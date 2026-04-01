@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Upload CSV — PayTrack{% endblock %}
+{% block content %}
+
+<div class="section-title" style="font-size:18px;margin-bottom:20px">Upload CSV Files</div>
+
+<!-- Upload area -->
+<div class="card mb-24">
+  <form method="POST" enctype="multipart/form-data" id="upload-form">
+    <div id="drop-zone"
+         style="border:2px dashed var(--slate200);border-radius:12px;padding:40px;text-align:center;
+                cursor:pointer;transition:border-color .2s,background .2s"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="handleDragOver(event)"
+         ondragleave="handleDragLeave(event)"
+         ondrop="handleDrop(event)">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--slate400)"
+           stroke-width="1.5" style="margin-bottom:12px">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="fw-700 mb-8" style="color:var(--slate700)">Drop CSV files here</div>
+      <div class="text-sm text-muted">or click to browse</div>
+      <input id="file-input" type="file" name="csv_files" multiple accept=".csv"
+             style="display:none" onchange="showFiles(this.files)"/>
+    </div>
+
+    <div id="file-list" style="display:none;margin-top:16px">
+      <div class="text-xs text-muted fw-700 mb-8" style="letter-spacing:.5px;text-transform:uppercase">
+        Selected files
+      </div>
+      <div id="files-display"></div>
+    </div>
+
+    <div class="mt-16 flex gap-8">
+      <button type="submit" class="btn btn-primary btn-block" id="upload-btn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Import to Database
+      </button>
+    </div>
+  </form>
+
+  <!-- CSV format hint -->
+  <div class="mt-16" style="background:var(--slate50);border-radius:10px;padding:14px">
+    <div class="text-xs fw-700 text-muted mb-8" style="letter-spacing:.5px;text-transform:uppercase">
+      Expected CSV columns
+    </div>
+    <div class="mono text-xs text-muted">
+      User ID, Username, OK Count, Rate, Bkash, Rocket, Paid Status
+    </div>
+    <div class="text-xs text-muted mt-8">
+      Filename is used as the date (e.g. <span class="mono">2024-01-15.csv</span>). 
+      Rate column is used as fallback if no tier matches.
+    </div>
+  </div>
+</div>
+
+<!-- Imported files -->
+{% if files_in_db %}
+<div class="section-title" style="font-size:14px">Imported Files</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th style="text-align:right">Entries</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in files_in_db %}
+        <tr>
+          <td class="mono fw-700" style="font-size:13px">{{ f['filename'] }}</td>
+          <td style="text-align:right">
+            <span class="pill pill-blue">{{ f['cnt'] }} rows</span>
+          </td>
+          <td style="text-align:right">
+            <form method="POST" action="/upload/delete/{{ f['filename'] }}"
+                  onsubmit="return confirm('Delete all entries for {{ f['filename'] }}?')">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="text-muted">No CSV files imported yet.</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showFiles(files) {
+  const list = document.getElementById('file-list');
+  const display = document.getElementById('files-display');
+  const btn = document.getElementById('upload-btn');
+
+  if (!files.length) { list.style.display = 'none'; btn.disabled = true; return; }
+
+  list.style.display = 'block';
+  btn.disabled = false;
+  display.innerHTML = '';
+
+  Array.from(files).forEach(f => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--slate100)';
+    div.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <span class="mono text-sm" style="flex:1">${f.name}</span>
+      <span class="text-xs text-muted">${(f.size/1024).toFixed(1)} KB</span>
+    `;
+    display.appendChild(div);
+  });
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  const z = document.getElementById('drop-zone');
+  z.style.borderColor = 'var(--blue)';
+  z.style.background = '#EFF6FF';
+}
+function handleDragLeave(e) {
+  const z = document.getElementById('drop-zone');
+  z.style.borderColor = 'var(--slate200)';
+  z.style.background = '';
+}
+function handleDrop(e) {
+  e.preventDefault();
+  handleDragLeave(e);
+  const input = document.getElementById('file-input');
+  const dt = e.dataTransfer;
+  // Assign dropped files to input (modern browsers support this)
+  const files = Array.from(dt.files).filter(f => f.name.endsWith('.csv'));
+  if (!files.length) return;
+
+  // Use DataTransfer to assign files to the input
+  const dtt = new DataTransfer();
+  files.forEach(f => dtt.items.add(f));
+  input.files = dtt.files;
+  showFiles(input.files);
+}
+</script>
+{% endblock %}
