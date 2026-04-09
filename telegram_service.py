@@ -20,14 +20,17 @@ import random
 import time
 from dataclasses import dataclass, field
 from typing import Sequence
-
+import os
 import aiohttp
 
 log = logging.getLogger(__name__)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BOT_TOKEN    = "8420317823:AAEzXkGqo7zWJ6tMclS1expTf6lZ4Jd25Hw"
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+from dotenv import load_dotenv
+load_dotenv()
+
+TELEGRAM_BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]   # required
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # Tune these for your load profile
 MAX_CONCURRENT  = 25    # parallel in-flight requests
